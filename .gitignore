@@ -1,0 +1,83 @@
+# TalentOS workspace .gitignore — single global ignore for server + client
+
+### Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+### Environment
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+
+### Logs
+logs/
+*.log
+npm-debug.log*
+
+### Runtime / temp
+tmp/
+pids/
+*.pid
+*.seed
+
+### Coverage
+coverage/
+.nyc_output/
+
+### Build outputs
+dist/
+build/
+out/
+public/
+
+### Client frameworks
+# React / Create React App
+client/build/
+# Next.js
+.next/
+# Nuxt
+.nuxt/
+# Vite / Svelte / Vue
+dist/
+.vite/
+# Expo
+.expo/
+
+### Uploads and user files (keep out of repo)
+uploads/
+uploads/**
+
+### Lockfiles / package artifacts
+*.tgz
+.pnp.*
+
+### IDE / Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+### OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### Misc caches
+.cache/
+.parcel-cache/
+.sass-cache/
+.cache-loader/
+.turbo/
+
+### Testing / tooling
+.eslintcache
+jest-cache/
+
+### Docker
+docker-compose.override.yml
