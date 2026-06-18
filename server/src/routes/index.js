@@ -6,8 +6,8 @@ const router = express.Router();
 // Adding a new feature = one line here + a new file
 router.use('/auth',       require('./auth.routes'));
 router.use('/employees',  require('./employee.routes'));
-router.use('/leaves',     require('./leave.routes'));
-router.use('/attendance', require('./attendance.routes'));
-router.use('/departments',require('./department.routes'));
+// router.use('/leaves',     require('./leave.routes'));
+// router.use('/attendance', require('./attendance.routes'));
+// router.use('/departments',require('./department.routes'));
 
 module.exports = router;

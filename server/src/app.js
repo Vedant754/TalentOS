@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-
+const cookieParser = require('cookie-parser');
 const logger = require('./middleware/logger');
 const requestContext = require('./middleware/requestContext');
 const { apiLimiter } = require('./middleware/rateLimiter');
@@ -37,6 +37,7 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use('/uploads', express.static('uploads'));
 
 // ─── 7. Routes ───────────────────
+app.use(cookieParser());
 app.use('/api', require('./routes/index'));
 
 // ─── 8. Health Check ─────────────────────────────────────────────────────────
