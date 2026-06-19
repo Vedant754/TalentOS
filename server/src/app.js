@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const logger = require('./middleware/logger');
 const requestContext = require('./middleware/requestContext');
 const { apiLimiter } = require('./middleware/rateLimiter');
+const multer = require('multer');
 
 const app = express();
 
@@ -34,7 +35,15 @@ app.use(express.json({ limit: '10kb' })); // Reject payloads over 10kb
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // ─── 6. Static Files (for profile photo uploads in Phase 6) ─────────────────
-app.use('/uploads', express.static('uploads'));
+// app.use('/uploads', express.static('uploads'));
+// src/app.js — update the static file serving line
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  dotfiles: 'deny',        // never serve hidden files like .env if one ends up in that folder
+  index: false,            // don't auto-serve a directory listing
+  setHeaders: (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff'); // browser won't guess content-type
+  },
+}));
 
 // ─── 7. Routes ───────────────────
 app.use(cookieParser());
@@ -64,14 +73,29 @@ app.get('/api/health', (req, res) => {
 app.use((err, req, res, next) => {
   console.error(`[${req.requestId}] Error:`, err.stack);
 
+  // Multer-specific errors need friendly translation
+  if (err instanceof multer.MulterError) {
+    let message = 'File upload error';
+    if (err.code === 'LIMIT_FILE_SIZE')  message = 'File is too large';
+    if (err.code === 'LIMIT_FILE_COUNT') message = 'Too many files uploaded';
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') message = 'Unexpected file field';
+
+    return res.status(400).json({
+      success: false,
+      requestId: req.requestId,
+      message,
+    });
+  }
+
   const statusCode = err.statusCode || 500;
   res.status(statusCode).json({
     success: false,
     requestId: req.requestId,
     message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
+
 
 app.all("/*splat", (req, res) => {
   res.status(404).json({
