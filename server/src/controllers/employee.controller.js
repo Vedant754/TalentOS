@@ -50,42 +50,101 @@ const AppError   = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
 // ─── GET /api/employees ────────────────────────────────────────────────────────
+// const getAllEmployees = asyncHandler(async (req, res) => {
+//   // Query builder — build the filter from query params
+//   const filter = {};
+
+//   // ?department=64abc → filter by department ID
+//   if (req.query.department) filter.department = req.query.department;
+
+//   // ?role=team_lead → filter by role
+//   if (req.query.role) filter.role = req.query.role;
+
+//   // ?search=priya → search name or email (case-insensitive)
+//   if (req.query.search) {
+//     filter.$or = [
+//       { firstName: { $regex: req.query.search, $options: 'i' } },
+//       { lastName:  { $regex: req.query.search, $options: 'i' } },
+//       { email:     { $regex: req.query.search, $options: 'i' } },
+//     ];
+//   }
+
+//   // Pagination
+//   const page  = parseInt(req.query.page)  || 1;
+//   const limit = parseInt(req.query.limit) || 10;
+//   const skip  = (page - 1) * limit;
+
+//   // Sorting — ?sort=-joinDate sorts newest first (- means descending)
+//   const sort = req.query.sort
+//     ? req.query.sort.split(',').join(' ')
+//     : '-createdAt';
+
+//   // Execute query with populate — replaces ObjectId with full Department doc
+//   const [employees, total] = await Promise.all([
+//     Employee.find(filter)
+//       .populate('department', 'name')       // Only fetch name field from Department
+//       .populate('reportingTo', 'firstName lastName designation')
+//       .select('-documents -emergencyContact') // Exclude sensitive fields from list view
+//       .sort(sort)
+//       .skip(skip)
+//       .limit(limit),
+//     Employee.countDocuments(filter),
+//   ]);
+
+//   res.status(200).json({
+//     success: true,
+//     count:   employees.length,
+//     total,
+//     page,
+//     pages:   Math.ceil(total / limit),
+//     data:    employees,
+//   });
+// });
+
 const getAllEmployees = asyncHandler(async (req, res) => {
-  // Query builder — build the filter from query params
   const filter = {};
 
-  // ?department=64abc → filter by department ID
-  if (req.query.department) filter.department = req.query.department;
-
-  // ?role=team_lead → filter by role
-  if (req.query.role) filter.role = req.query.role;
-
-  // ?search=priya → search name or email (case-insensitive)
-  if (req.query.search) {
+  // ─── ROLE-BASED DATA SCOPING — the heart of RBAC ─────────────────────────
+  // Same endpoint, same query params, but the BASE filter changes per role
+  if (req.user.role === 'employee') {
+    // Employees see only themselves in a list call
+    filter._id = req.user.employee;
+  } else if (req.user.role === 'team_lead') {
+    // Team Leads see their direct reports + themselves
     filter.$or = [
-      { firstName: { $regex: req.query.search, $options: 'i' } },
-      { lastName:  { $regex: req.query.search, $options: 'i' } },
-      { email:     { $regex: req.query.search, $options: 'i' } },
+      { reportingTo: req.user.employee },
+      { _id: req.user.employee },
     ];
   }
+  // ceo and hr_manager get no base restriction — they see everyone
+  // (their filter stays {} unless query params add more)
 
-  // Pagination
+  // Existing query param filters still apply ON TOP of the role-based scope
+  if (req.query.department) filter.department = req.query.department;
+  if (req.query.search) {
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { firstName: { $regex: req.query.search, $options: 'i' } },
+        { lastName:  { $regex: req.query.search, $options: 'i' } },
+      ],
+    });
+  }
+
   const page  = parseInt(req.query.page)  || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip  = (page - 1) * limit;
 
-  // Sorting — ?sort=-joinDate sorts newest first (- means descending)
-  const sort = req.query.sort
-    ? req.query.sort.split(',').join(' ')
-    : '-createdAt';
+  // ─── FIELD-LEVEL SCOPING — hide salary from non-HR/CEO roles ────────────
+  const sensitiveFields = '-documents -emergencyContact';
+  const salaryVisible = ['ceo', 'hr_manager'].includes(req.user.role);
+  const selectFields = salaryVisible ? sensitiveFields : `${sensitiveFields} -salary`;
 
-  // Execute query with populate — replaces ObjectId with full Department doc
   const [employees, total] = await Promise.all([
     Employee.find(filter)
-      .populate('department', 'name')       // Only fetch name field from Department
-      .populate('reportingTo', 'firstName lastName designation')
-      .select('-documents -emergencyContact') // Exclude sensitive fields from list view
-      .sort(sort)
+      .populate('department', 'name')
+      .select(selectFields)
+      .sort('-createdAt')
       .skip(skip)
       .limit(limit),
     Employee.countDocuments(filter),
@@ -93,11 +152,11 @@ const getAllEmployees = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    count:   employees.length,
+    count: employees.length,
     total,
     page,
-    pages:   Math.ceil(total / limit),
-    data:    employees,
+    pages: Math.ceil(total / limit),
+    data: employees,
   });
 });
 
@@ -264,6 +323,23 @@ const getEmployeeStats = asyncHandler(async (req, res) => {
   });
 });
 
+const updateMyProfile = asyncHandler(async (req, res) => {
+  // Strict whitelist — only these fields, regardless of what's in req.body
+  const allowedFields = ['phone', 'emergencyContact', 'profilePhoto'];
+  const updates = {};
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  });
+
+  const employee = await Employee.findByIdAndUpdate(
+    req.user.employee,
+    updates,
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({ success: true, data: employee });
+});
+
 module.exports = {
   getAllEmployees,
   getEmployee,
@@ -272,4 +348,5 @@ module.exports = {
   deleteEmployee,
   addDocument,
   getEmployeeStats,
+  updateMyProfile,
 };
