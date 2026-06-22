@@ -1,86 +1,191 @@
-// src/pages/dashboards/HRDashboard.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axiosInstance';
-import { useAuth } from '../../context/AuthContext';
+import { CheckIcon, SearchIcon, TrashIcon, UserCheckIcon, UsersIcon } from '../../components/icons';
+import {
+  DashboardHero,
+  EmptyState,
+  InlineAlert,
+  LoadingRows,
+  MetricCard,
+  Panel,
+} from '../../components/dashboard/DashboardPrimitives';
+import { formatCurrency, formatDate, formatRole, getEmployeeName } from '../../components/dashboard/dashboardUtils';
 
 const HRDashboard = () => {
-  const { user, logout } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // HR sees ALL employees (Phase 5's data scoping gives them no base filter)
-    api.get('/employees').then(({ data }) => setEmployees(data.data));
-    api.get('/leaves?status=pending').then(({ data }) => setPendingLeaves(data.data));
+    const loadWorkspace = async () => {
+      try {
+        const [employeesResponse, leavesResponse] = await Promise.all([
+          api.get('/employees?limit=50'),
+          api.get('/leaves?status=pending'),
+        ]);
+
+        setEmployees(employeesResponse.data.data || []);
+        setPendingLeaves(leavesResponse.data.data || []);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Unable to load HR workspace.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWorkspace();
   }, []);
 
+  const filteredEmployees = useMemo(() => {
+    const normalisedSearch = search.trim().toLowerCase();
+    if (!normalisedSearch) return employees;
+
+    return employees.filter((employee) => {
+      const searchableText = [
+        getEmployeeName(employee),
+        employee.email,
+        employee.designation,
+        employee.department?.name,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      return searchableText.includes(normalisedSearch);
+    });
+  }, [employees, search]);
+
+  const averageSalary = useMemo(() => {
+    if (!employees.length) return 0;
+    const totalSalary = employees.reduce((total, employee) => total + (employee.salary || 0), 0);
+    return totalSalary / employees.length;
+  }, [employees]);
+
   const handleApprove = async (leaveId) => {
-    await api.put(`/leaves/${leaveId}/approve`);
-    setPendingLeaves((prev) => prev.filter((l) => l._id !== leaveId));
+    setActionId(leaveId);
+    setError('');
+
+    try {
+      await api.put(`/leaves/${leaveId}/approve`);
+      setPendingLeaves((currentLeaves) => currentLeaves.filter((leave) => leave._id !== leaveId));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to approve leave request.');
+    } finally {
+      setActionId('');
+    }
   };
 
   const handleDeactivate = async (employeeId) => {
-    if (!confirm('Deactivate this employee?')) return;
-    await api.delete(`/employees/${employeeId}`); // Phase 3's soft delete
-    setEmployees((prev) => prev.filter((e) => e._id !== employeeId));
+    if (!confirm('Deactivate this employee account?')) return;
+
+    setActionId(employeeId);
+    setError('');
+
+    try {
+      await api.delete(`/employees/${employeeId}`);
+      setEmployees((currentEmployees) => currentEmployees.filter((employee) => employee._id !== employeeId));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to deactivate employee.');
+    } finally {
+      setActionId('');
+    }
   };
 
   return (
     <div className="dashboard">
-        <div className="dashboard-header">
-          <div>
-            <h1>HR Workspace</h1>
-            <p className="role-badge">HR Manager</p>
-          </div>
-          <button className="button button-secondary" onClick={logout}>Log out</button>
-        </div>
+      <DashboardHero
+        eyebrow="People operations"
+        title="HR Workspace"
+        description="Review pending leaves, monitor active employee records, and keep workforce data tidy."
+      />
 
-        <div className="dashboard-grid">
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Pending Leave Approvals</h2>
-                <p className="meta">Review and approve pending requests from employees.</p>
-              </div>
-            </div>
-            <div className="panel-content">
-              {pendingLeaves.length === 0 && <p className="muted">No pending approvals right now.</p>}
+      {error && <InlineAlert>{error}</InlineAlert>}
+
+      <section className="metrics-grid">
+        <MetricCard icon={UsersIcon} label="Employees" value={employees.length} detail="Active records loaded" />
+        <MetricCard icon={UserCheckIcon} label="Pending leave" value={pendingLeaves.length} detail="Awaiting HR action" tone="amber" />
+        <MetricCard icon={CheckIcon} label="Avg. salary" value={formatCurrency(averageSalary)} detail="Visible to HR" tone="green" />
+      </section>
+
+      <div className="dashboard-grid dashboard-grid-wide">
+        <Panel title="Pending Leave Approvals" description="Requests waiting for HR review.">
+          {loading ? (
+            <LoadingRows rows={3} />
+          ) : pendingLeaves.length === 0 ? (
+            <EmptyState title="No pending approvals" description="New requests will appear here when employees apply." />
+          ) : (
+            <div className="request-list">
               {pendingLeaves.map((leave) => (
-                <div className="leave-card" key={leave._id}>
-                  <div>{leave.employee.firstName} {leave.employee.lastName} — {leave.type}</div>
-                  <div className="meta">{new Date(leave.startDate).toLocaleDateString()} → {new Date(leave.endDate).toLocaleDateString()}</div>
-                  <button className="button button-primary" onClick={() => handleApprove(leave._id)}>Approve</button>
-                </div>
+                <article className="request-card" key={leave._id}>
+                  <div>
+                    <strong>{getEmployeeName(leave.employee)}</strong>
+                    <span>{formatRole(leave.type)} leave / {formatDate(leave.startDate)} to {formatDate(leave.endDate)}</span>
+                  </div>
+                  <button
+                    className="button button-primary button-compact"
+                    type="button"
+                    disabled={actionId === leave._id}
+                    onClick={() => handleApprove(leave._id)}
+                  >
+                    <CheckIcon />
+                    {actionId === leave._id ? 'Approving...' : 'Approve'}
+                  </button>
+                </article>
               ))}
             </div>
-          </section>
+          )}
+        </Panel>
 
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>All Employees ({employees.length})</h2>
-                <p className="meta">Manage active employees in the organization.</p>
-              </div>
-            </div>
+        <Panel
+          title={`Employees (${filteredEmployees.length})`}
+          description="Search and manage active employee records."
+          className="panel-wide"
+          action={(
+            <label className="search-field">
+              <SearchIcon />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search people"
+              />
+            </label>
+          )}
+        >
+          {loading ? (
+            <LoadingRows rows={5} />
+          ) : filteredEmployees.length === 0 ? (
+            <EmptyState title="No employees found" description="Try another name, department, or designation." />
+          ) : (
             <div className="table-responsive">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th>Department</th>
                     <th>Designation</th>
                     <th>Salary</th>
-                    <th>Actions</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map((emp) => (
-                    <tr key={emp._id}>
-                      <td>{emp.firstName} {emp.lastName}</td>
-                      <td>{emp.designation}</td>
-                      <td>₹{emp.salary?.toLocaleString()}</td>
+                  {filteredEmployees.map((employee) => (
+                    <tr key={employee._id}>
                       <td>
-                        <button className="button button-secondary" onClick={() => handleDeactivate(emp._id)}>
-                          Deactivate
+                        <strong>{getEmployeeName(employee)}</strong>
+                        <span>{employee.email}</span>
+                      </td>
+                      <td>{employee.department?.name || 'Unassigned'}</td>
+                      <td>{employee.designation}</td>
+                      <td>{formatCurrency(employee.salary)}</td>
+                      <td>
+                        <button
+                          className="icon-button danger-button"
+                          type="button"
+                          title="Deactivate employee"
+                          disabled={actionId === employee._id}
+                          onClick={() => handleDeactivate(employee._id)}
+                        >
+                          <TrashIcon />
                         </button>
                       </td>
                     </tr>
@@ -88,9 +193,10 @@ const HRDashboard = () => {
                 </tbody>
               </table>
             </div>
-          </section>
-        </div>
+          )}
+        </Panel>
       </div>
+    </div>
   );
 };
 

@@ -1,9 +1,8 @@
-// src/pages/LoginPage.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowRightIcon, BriefcaseIcon, LockIcon, MailIcon, ShieldIcon } from '../components/icons';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardPath } from '../routes/RoleRoute';
-import { FiMail, FiLock, FiArrowRight } from 'react-icons/fi';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -13,10 +12,11 @@ const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
     setSubmitting(true);
+
     try {
       const loggedInUser = await login(email, password);
       navigate(getDashboardPath(loggedInUser.role), { replace: true });
@@ -28,59 +28,74 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-panel">
-        <div className="brand">
+    <main className="auth-page">
+      <section className="auth-panel">
+        <div className="auth-brand">
           <div className="brand-mark">T</div>
           <div>
-            <div className="eyebrow">TalentOS</div>
-            <p className="brand-copy">Secure workforce management with fast access to your dashboard.</p>
+            <p className="eyebrow">TalentOS</p>
+            <h1>Sign in to your workspace</h1>
+            <p>Secure access for leaders, HR teams, managers, and employees.</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="form-grid">
-          <div>
-            <h1>Welcome back</h1>
-            <p className="muted">Sign in to continue managing your team and tasks.</p>
-          </div>
+          {error && <div className="inline-alert inline-alert-error">{error}</div>}
 
-          {error && <div className="alert alert-error">{error}</div>}
-
-          <div className="field">
+          <label className="field">
             <span>Email</span>
             <div className="field-group">
-              <FiMail className="field-icon" />
+              <MailIcon className="field-icon" />
               <input
                 type="email"
                 placeholder="name@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
                 required
               />
             </div>
-          </div>
+          </label>
 
-          <div className="field">
+          <label className="field">
             <span>Password</span>
             <div className="field-group">
-              <FiLock className="field-icon" />
+              <LockIcon className="field-icon" />
               <input
                 type="password"
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
                 required
               />
             </div>
-          </div>
+          </label>
 
           <button type="submit" className="button button-primary" disabled={submitting}>
-            {submitting ? 'Signing in…' : 'Sign in'}
-            <FiArrowRight className="button-icon" />
+            {submitting ? 'Signing in...' : 'Sign in'}
+            <ArrowRightIcon />
           </button>
         </form>
-      </div>
-    </div>
+      </section>
+
+      <aside className="auth-aside" aria-label="Platform highlights">
+        <div className="auth-aside-row">
+          <ShieldIcon />
+          <div>
+            <strong>Role-secured access</strong>
+            <span>Dashboards reflect the same RBAC boundaries enforced by the API.</span>
+          </div>
+        </div>
+        <div className="auth-aside-row">
+          <BriefcaseIcon />
+          <div>
+            <strong>Workforce operations</strong>
+            <span>Headcount, leave approvals, and employee records stay in one flow.</span>
+          </div>
+        </div>
+      </aside>
+    </main>
   );
 };
 

@@ -1,43 +1,87 @@
-// src/pages/dashboards/TeamLeadDashboard.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
+import { CheckIcon, MailIcon, UserPlusIcon, UsersIcon } from '../../components/icons';
+import {
+  DashboardHero,
+  EmptyState,
+  InlineAlert,
+  LoadingRows,
+  MetricCard,
+  Panel,
+} from '../../components/dashboard/DashboardPrimitives';
+import { formatDate, formatRole, getEmployeeName } from '../../components/dashboard/dashboardUtils';
 
 const TeamLeadDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [team, setTeam] = useState([]);
   const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Same /employees endpoint as HR — but Phase 5's scoping returns
-    // ONLY this team lead's direct reports, and salary is stripped server-side
-    api.get('/employees').then(({ data }) => setTeam(data.data));
-    api.get('/leaves?status=pending').then(({ data }) => setPendingLeaves(data.data));
+    const loadTeamWorkspace = async () => {
+      try {
+        const [teamResponse, leavesResponse] = await Promise.all([
+          api.get('/employees?limit=50'),
+          api.get('/leaves?status=pending'),
+        ]);
+
+        setTeam(teamResponse.data.data || []);
+        setPendingLeaves(leavesResponse.data.data || []);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Unable to load team workspace.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTeamWorkspace();
   }, []);
 
+  const directReports = useMemo(() => {
+    const currentUserId = user.employee?._id || user.employee?.id;
+    return team.filter((member) => (member._id || member.id) !== currentUserId);
+  }, [team, user.employee]);
+
   const handleApprove = async (leaveId) => {
-    await api.put(`/leaves/${leaveId}/approve`); // backend re-checks they're a direct report
-    setPendingLeaves((prev) => prev.filter((l) => l._id !== leaveId));
+    setActionId(leaveId);
+    setError('');
+
+    try {
+      await api.put(`/leaves/${leaveId}/approve`);
+      setPendingLeaves((currentLeaves) => currentLeaves.filter((leave) => leave._id !== leaveId));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to approve leave request.');
+    } finally {
+      setActionId('');
+    }
   };
 
   return (
     <div className="dashboard">
-        <div className="dashboard-header">
-          <div>
-            <h1>Team Lead Workspace</h1>
-            <p className="role-badge">Team Lead</p>
-          </div>
-          <button className="button button-secondary" onClick={logout}>Log out</button>
-        </div>
+      <DashboardHero
+        eyebrow="Team operations"
+        title={`Welcome, ${getEmployeeName(user.employee)}`}
+        description="Keep direct reports visible and clear pending leave approvals quickly."
+      />
 
-        <div className="dashboard-grid">
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>My Team ({team.length})</h2>
-                <p className="meta">View your direct reports and contact details.</p>
-              </div>
-            </div>
+      {error && <InlineAlert>{error}</InlineAlert>}
+
+      <section className="metrics-grid">
+        <MetricCard icon={UsersIcon} label="Team members" value={directReports.length} detail="Direct reports" />
+        <MetricCard icon={UserPlusIcon} label="Pending approvals" value={pendingLeaves.length} detail="Team leave requests" tone="amber" />
+        <MetricCard icon={MailIcon} label="Directory" value={team.length} detail="Scoped by your role" tone="green" />
+      </section>
+
+      <div className="dashboard-grid">
+        <Panel title="My Team" description="Direct reports and contact details.">
+          {loading ? (
+            <LoadingRows rows={5} />
+          ) : directReports.length === 0 ? (
+            <EmptyState title="No direct reports" description="Team members assigned to you will appear here." />
+          ) : (
             <div className="table-responsive">
               <table className="data-table">
                 <thead>
@@ -48,9 +92,12 @@ const TeamLeadDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {team.map((member) => (
+                  {directReports.map((member) => (
                     <tr key={member._id}>
-                      <td>{member.firstName} {member.lastName}</td>
+                      <td>
+                        <strong>{getEmployeeName(member)}</strong>
+                        <span>{member.department?.name || 'Unassigned'}</span>
+                      </td>
                       <td>{member.designation}</td>
                       <td>{member.email}</td>
                     </tr>
@@ -58,27 +105,38 @@ const TeamLeadDashboard = () => {
                 </tbody>
               </table>
             </div>
-          </section>
+          )}
+        </Panel>
 
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Pending Approvals</h2>
-                <p className="meta">Approve leave requests from your team members.</p>
-              </div>
-            </div>
-            <div className="panel-content">
-              {pendingLeaves.length === 0 && <p className="muted">No pending approvals at the moment.</p>}
+        <Panel title="Pending Approvals" description="Leave requests submitted by your team.">
+          {loading ? (
+            <LoadingRows rows={4} />
+          ) : pendingLeaves.length === 0 ? (
+            <EmptyState title="Nothing to approve" description="New requests from direct reports will show up here." />
+          ) : (
+            <div className="request-list">
               {pendingLeaves.map((leave) => (
-                <div className="leave-card" key={leave._id}>
-                  <div>{leave.employee.firstName} — {leave.type} ({leave.numberOfDays} days)</div>
-                  <button className="button button-primary" onClick={() => handleApprove(leave._id)}>Approve</button>
-                </div>
+                <article className="request-card" key={leave._id}>
+                  <div>
+                    <strong>{getEmployeeName(leave.employee)}</strong>
+                    <span>{formatRole(leave.type)} / {formatDate(leave.startDate)} to {formatDate(leave.endDate)}</span>
+                  </div>
+                  <button
+                    className="button button-primary button-compact"
+                    type="button"
+                    disabled={actionId === leave._id}
+                    onClick={() => handleApprove(leave._id)}
+                  >
+                    <CheckIcon />
+                    {actionId === leave._id ? 'Approving...' : 'Approve'}
+                  </button>
+                </article>
               ))}
             </div>
-          </section>
-        </div>
+          )}
+        </Panel>
       </div>
+    </div>
   );
 };
 

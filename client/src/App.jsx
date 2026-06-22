@@ -1,21 +1,19 @@
-// src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 import RoleRoute, { getDashboardPath } from './routes/RoleRoute';
 import AppShell from './components/AppShell';
-
 import LoginPage from './pages/LoginPage';
 import CEODashboard from './pages/dashboards/CEODashboard';
 import HRDashboard from './pages/dashboards/HRDashboard';
 import TeamLeadDashboard from './pages/dashboards/TeamLeadDashboard';
 import EmployeeDashboard from './pages/dashboards/EmployeeDashboard';
 
-// Sends an already-logged-in user straight to their own dashboard,
-// and a fresh visitor to /dashboard/* into the login page
 const RootRedirect = () => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="page-loader">Loading…</div>;
+
+  if (loading) return <div className="page-loader">Loading...</div>;
+
   return <Navigate to={user ? getDashboardPath(user.role) : '/login'} replace />;
 };
 
@@ -27,7 +25,6 @@ function App() {
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Layer 1 — must be authenticated */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route element={<RoleRoute allowedRoles={['ceo']} />}>
