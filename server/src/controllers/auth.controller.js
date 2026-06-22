@@ -21,7 +21,8 @@ const sendTokenResponse = async (user, statusCode, res) => {
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production', // HTTPS only in prod
-    sameSite: 'strict', // CSRF protection — cookie not sent on cross-site requests
+    sameSite: 'none', // allow cross-site /localhost cookie use for refresh flow
+    path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
   });
 
@@ -114,7 +115,8 @@ const logout = asyncHandler(async (req, res) => {
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'none',
+    path: '/',
   });
 
   res.status(200).json({ success: true, message: 'Logged out successfully' });

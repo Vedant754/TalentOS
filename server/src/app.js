@@ -29,7 +29,7 @@ app.use(requestContext);
 // ─── 4. Logging ───────────────────
 app.use(morgan('dev'));
 app.use(logger);
-
+app.use(cookieParser());
 // ─── 5. Body Parsing ──────────────
 app.use(express.json({ limit: '10kb' })); // Reject payloads over 10kb
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
@@ -37,16 +37,15 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 // ─── 6. Static Files (for profile photo uploads in Phase 6) ─────────────────
 // app.use('/uploads', express.static('uploads'));
 // src/app.js — update the static file serving line
-app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
-  dotfiles: 'deny',        // never serve hidden files like .env if one ends up in that folder
-  index: false,            // don't auto-serve a directory listing
-  setHeaders: (res) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff'); // browser won't guess content-type
-  },
-}));
+// app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+//   dotfiles: 'deny',        // never serve hidden files like .env if one ends up in that folder
+//   index: false,            // don't auto-serve a directory listing
+//   setHeaders: (res) => {
+//     res.setHeader('X-Content-Type-Options', 'nosniff'); // browser won't guess content-type
+//   },
+// }));
 
 // ─── 7. Routes ───────────────────
-app.use(cookieParser());
 app.use('/api', require('./routes/index'));
 
 // ─── 8. Health Check ─────────────────────────────────────────────────────────

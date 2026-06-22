@@ -18,7 +18,7 @@ const router  = express.Router();
 const ctrl    = require('../controllers/employee.controller');
 const validate = require('../middleware/validate');
 const { protect } = require('../middleware/auth.middleware'); 
-const { protect } = require('../middleware/auth.middleware');
+const { canAccessEmployee } = require('../middleware/ownership.middleware');
 const { authorize } = require('../middleware/rbac.middleware');
 const { createEmployeeRules, updateEmployeeRules } = require('../validators/employee.validator');
 
