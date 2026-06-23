@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/authState';
+import { getDashboardPath } from './dashboardPaths';
 
 const RoleRoute = ({ allowedRoles }) => {
   const { user } = useAuth();
@@ -9,17 +10,6 @@ const RoleRoute = ({ allowedRoles }) => {
   }
 
   return <Outlet />;
-};
-
-export const getDashboardPath = (role) => {
-  const map = {
-    ceo: '/dashboard/ceo',
-    hr_manager: '/dashboard/hr',
-    team_lead: '/dashboard/team-lead',
-    employee: '/dashboard/employee',
-  };
-
-  return map[role] || '/login';
 };
 
 export default RoleRoute;

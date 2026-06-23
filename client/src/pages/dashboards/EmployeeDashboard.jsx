@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axiosInstance';
-import { useAuth } from '../../context/AuthContext';
 import { CalendarIcon, ClockIcon, SendIcon, UserIcon } from '../../components/icons';
+import { useAuth } from '../../context/authState';
 import {
   DashboardHero,
   EmptyState,

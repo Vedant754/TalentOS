@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { getDashboardPath } from '../routes/RoleRoute';
+import { useAuth } from '../context/authState';
+import { getDashboardPath } from '../routes/dashboardPaths';
 import { CalendarIcon, GridIcon, LogOutIcon, MoonIcon, SunIcon, UserIcon } from './icons';
 import { formatRole, getEmployeeName } from './dashboard/dashboardUtils';
 

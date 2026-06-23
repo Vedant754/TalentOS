@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/authState';
 import ProtectedRoute from './routes/ProtectedRoute';
-import RoleRoute, { getDashboardPath } from './routes/RoleRoute';
+import RoleRoute from './routes/RoleRoute';
+import { getDashboardPath } from './routes/dashboardPaths';
 import AppShell from './components/AppShell';
 import LoginPage from './pages/LoginPage';
 import CEODashboard from './pages/dashboards/CEODashboard';

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, BriefcaseIcon, LockIcon, MailIcon, ShieldIcon } from '../components/icons';
-import { useAuth } from '../context/AuthContext';
-import { getDashboardPath } from '../routes/RoleRoute';
+import { useAuth } from '../context/authState';
+import { getDashboardPath } from '../routes/dashboardPaths';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
