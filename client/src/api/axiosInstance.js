@@ -1,9 +1,8 @@
-// src/api/axiosInstance.js
 import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
-  withCredentials: true, // sends the httpOnly refreshToken cookie automatically
+  withCredentials: true,
 });
 
 const refreshClient = axios.create({
@@ -11,66 +10,75 @@ const refreshClient = axios.create({
   withCredentials: true,
 });
 
-// In-memory token store — NOT localStorage (Phase 4's XSS reasoning applies here too)
 let accessToken = null;
-export const setAccessToken = (token) => { accessToken = token; };
+let refreshPromise = null;
+
+const authRoutesWithoutRefreshRetry = ['/auth/login', '/auth/register', '/auth/refresh'];
+
+const isAuthRouteWithoutRefreshRetry = (url = '') => (
+  authRoutesWithoutRefreshRetry.some((route) => url.endsWith(route))
+);
+
+export const setAccessToken = (token) => {
+  accessToken = token;
+};
+
 export const getAccessToken = () => accessToken;
 
-// ─── REQUEST interceptor — attach the token to every outgoing call ───────────
+export const refreshAccessToken = async () => {
+  if (!refreshPromise) {
+    refreshPromise = refreshClient
+      .post('/auth/refresh')
+      .then(({ data }) => {
+        setAccessToken(data.accessToken);
+        return data;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+};
+
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
+
   return config;
 });
 
-// ─── RESPONSE interceptor — handle expired tokens transparently ──────────────
-let isRefreshing = false;
-let refreshQueue = []; // requests that arrived WHILE a refresh was already in flight
-
 api.interceptors.response.use(
-  (response) => response, // happy path — pass through untouched
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const shouldTryRefresh = (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthRouteWithoutRefreshRetry(originalRequest.url)
+    );
 
-    // Only attempt refresh on 401, and only ONCE per request (avoid infinite loops)
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        // Another request already triggered a refresh — queue this one
-        // instead of firing a second simultaneous refresh call
-        return new Promise((resolve, reject) => {
-          refreshQueue.push({ resolve, reject, originalRequest });
-        });
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const { data } = await refreshClient.post('/auth/refresh');
-        setAccessToken(data.accessToken);
-
-        // Retry all queued requests with the new token
-        refreshQueue.forEach(({ resolve, originalRequest: req }) => {
-          req.headers.Authorization = `Bearer ${data.accessToken}`;
-          resolve(api(req));
-        });
-        refreshQueue = [];
-
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-        return api(originalRequest); // retry the ORIGINAL failed request
-      } catch (refreshError) {
-        refreshQueue.forEach(({ reject }) => reject(refreshError));
-        refreshQueue = [];
-        setAccessToken(null);
-        window.location.href = '/login'; // refresh token itself expired — full re-login needed
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+    if (!shouldTryRefresh) {
+      return Promise.reject(error);
     }
 
-    return Promise.reject(error);
+    originalRequest._retry = true;
+
+    try {
+      const data = await refreshAccessToken();
+      originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+      return api(originalRequest);
+    } catch (refreshError) {
+      setAccessToken(null);
+
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+
+      return Promise.reject(refreshError);
+    }
   }
 );
 

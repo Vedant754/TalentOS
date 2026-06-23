@@ -121,7 +121,7 @@ employeeSchema.virtual('yearsOfService').get(function () {
 });
 
 // ─── INDEXES ─────────────────────────────────────────────────────────────────
-employeeSchema.index({ email: 1 });
+// Note: `unique: true` on `email` already creates an index; avoid duplicating it
 employeeSchema.index({ department: 1 });
 employeeSchema.index({ role: 1 });
 employeeSchema.index({ isActive: 1 });
@@ -132,10 +132,9 @@ employeeSchema.index({ department: 1, isActive: 1 });
 // This hook runs before any find() — automatically filters out inactive employees
 // So every query gets only active employees unless explicitly overridden
 employeeSchema.pre(/^find/, function () {
-  // 'this' is the query object
-  if (this.getOptions().includeInactive) return next();
+  // 'this' is the query object (no next argument for query middleware)
+  if (this.getOptions().includeInactive) return;
   this.find({ isActive: { $ne: false } });
-//   next();
 });
 
 module.exports = mongoose.model('Employee', employeeSchema);

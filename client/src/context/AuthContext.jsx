@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import api, { setAccessToken } from '../api/axiosInstance';
+import api, { refreshAccessToken, setAccessToken } from '../api/axiosInstance';
 import { AuthContext } from './authState';
+
+let restoreSessionPromise = null;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -9,12 +11,20 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const { data } = await api.post('/auth/refresh');
-        setAccessToken(data.accessToken);
-        setUser(data.user);
-        const me = await api.get('/auth/me');
-        setUser(me.data.data);
+        restoreSessionPromise ||= refreshAccessToken()
+          .then(async (data) => {
+            const me = await api.get('/auth/me');
+            return { tokenData: data, userData: me.data.data };
+          })
+          .finally(() => {
+            restoreSessionPromise = null;
+          });
+
+        const { tokenData, userData } = await restoreSessionPromise;
+        setAccessToken(tokenData.accessToken);
+        setUser(userData);
       } catch {
+        setAccessToken(null);
         setUser(null);
       } finally {
         setLoading(false);
@@ -44,3 +54,4 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+

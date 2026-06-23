@@ -44,8 +44,8 @@ departmentSchema.virtual('headCount', {
   count: true, // Just count, don't fetch full docs
 });
 
-// INDEX — speeds up queries that filter by name or isActive
-departmentSchema.index({ name: 1 });
+// INDEX — speeds up queries that filter by isActive
+// Note: `unique: true` on `name` already creates an index, avoid duplicating it
 departmentSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('Department', departmentSchema);
